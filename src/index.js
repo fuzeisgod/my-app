@@ -28,18 +28,13 @@ function createTextElement(text) {
   }
 }
 
-function createDom(fiber) {
-  // creating the dom node using the `element.type`
-  // if `element.type` is `TEXT_ELEMENT`, create a text node instead of a regular node
-  const dom =
-    fiber.type === "TEXT_ELEMENT"
-      ?
-      document.createTextNode("")
-      :
-      document.createElement(fiber.type)
 
-  // 为节点分配除了 children 的 props 属性
+
+function createDom(fiber) {
+  const dom = fiber.type === 'TEXT_ELEMENT' ? document.createTextNode('') : document.createElement(fiber.type)
+
   const isProperty = key => key !== "children"
+
   Object.keys(fiber.props).filter(isProperty).forEach(name => {
     dom[name] = fiber.props[name]
   })
@@ -47,36 +42,138 @@ function createDom(fiber) {
   return dom
 }
 
+function commitRoot() {
+  // TODO add nodes to dom
+  commitWork(wipRoot.child)
+  currentRoot = wipRoot
+  wipRoot = null
+}
+
+function commitWork(fiber) {
+  if (!fiber) {
+    return
+  }
+  const domParent = fiber.parent.dom
+  domParent.appendChild(fiber.dom)
+  commitWork(fiber.child)
+  commitWork(fiber.sibling)
+}
+
 function render(element, container) {
-  // TODO set next unit of work
-  nextUnitOfWork = {
+  wipRoot = {
     dom: container,
     props: {
       children: [element]
-    }
+    },
+    alternate: currentRoot
   }
+  nextUnitOfWork = wipRoot
 }
 
+
+
+// next unit of work
 let nextUnitOfWork = null;
+let currentRoot = null;
+let wipRoot = null
 
 function workLoop(deadLine) {
+  // should browser interrupt the rendering ?
   let shouldYield = false;
   while (nextUnitOfWork && !shouldYield) {
-    nextUnitOfWork = performUnitOfWork(nextUnitOfWork)
+
+    nextUnitOfWork = performUnitOfWork(
+      nextUnitOfWork
+    )
+    // check how much time until browser take control again
     shouldYield = deadLine.timeRemaining() < 1
   }
-  // make a loop, 主线程空闲时 run the callback
+
+  if (!nextUnitOfWork && wipRoot) {
+    commitRoot()
+  }
+
   requestIdleCallback(workLoop)
 }
 
+// make a loop to run { workLoop }, browser will run the callback when the main thread is idle
 requestIdleCallback(workLoop)
 
-// 执行工作，返回下一个工作单元
-function performUnitOfWork(nextUnitOfWork) {
-  // TODO add dom node
-  // TODO create new fibers
-  // TODO return next unit
+// perform the work and return the next unit of work
+function performUnitOfWork(fiber) {
+  // add dom node
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)
+  }
+
+
+  const elements = fiber.props.children
+  // create new fibers for the element's children
+  reconcileChildren(fiber, elements)
+
+  // TODO return next unit of work
+  if (fiber.child) {
+    return fiber.child
+  }
+  let nextFiber = fiber
+  while (nextFiber) {
+    if (nextFiber.sibling) {
+      return nextFiber.sibling
+    }
+    nextFiber = nextFiber.parent
+  }
 }
+
+// reconcile the old fibers with the new elements
+function reconcileChildren(wipFiber, elements) {
+  // create new fibers for the element's children
+  let index = 0;
+  let oldFiber = wipFiber.alternate && wipFiber.alternate.child
+  let prevSibling = null;
+
+  while (index < elements.lenght || oldFiber != null) {
+    const element = elements[index]
+    let newFiber = null
+
+    // TODO compare oldFiber to element
+    const sameType = oldFiber && element && element.type === oldFiber.type
+
+    if (sameType) {
+      // TODO update the node
+      newFiber = {
+        type: oldFiber.type,
+        props: element.props,
+        dom: oldFiber.dom,
+        parent: wipFiber,
+        alternate: oldFiber,
+        effectTag: 'UPDATE'
+      }
+    }
+
+    if (element && !sameType) {
+      // TODO add this node
+    }
+
+    if (oldFiber && !sameType) {
+      // TODO delete the oldFiber's node
+    }
+
+    if (oldFiber) {
+      oldFiber = oldFiber.sibling
+    }
+
+    if (index === 0) {
+      fiber.child = newFiber
+    } else {
+      prevSibling.sibling = newFiber
+    }
+
+    prevSibling = newFiber
+    index++
+
+  }
+}
+
 
 const Chen = {
   createElement,
