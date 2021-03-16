@@ -65,6 +65,7 @@ function render(element, container) {
     props: {
       children: [element]
     },
+    // old fiber commited to the dom in the previos time
     alternate: currentRoot
   }
   nextUnitOfWork = wipRoot
